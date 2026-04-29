@@ -1101,7 +1101,7 @@
                 };
 
                 // Cloud Sync Init (Firebase)
-                this.loveKey = (localStorage.getItem('heartsync_love_key') || localStorage.getItem('heartsync_couple_code') || '').toLowerCase();
+                this.loveKey = (localStorage.getItem('heartsync_love_key') || localStorage.getItem('heartsync_couple_code') || '').toUpperCase();
                 this.isCloudEnabled = !!this.loveKey;
                 this.db = null;
                 this.socket = null;
@@ -1159,7 +1159,10 @@
                             localStorage.setItem('heartsync_love_challenges', JSON.stringify(this.loveChallenges));
                         }
                         if (data.cycle) {
-                            this.cycleData = data.cycle;
+                            this.cycleData = {
+                                length: data.cycle.length || 28,
+                                periodDays: data.cycle.periodDays || []
+                            };
                             localStorage.setItem('heartsync_cycle_data', JSON.stringify(this.cycleData));
                         }
                         if (data.anniversary) {
@@ -1216,11 +1219,36 @@
                 const emojiMap = { miss: "🥺", kiss: "💋", hug: "🤗", sorry: "🙏", heart: "❤️" };
                 const msgMap = { miss: "Người ấy đang rất nhớ bạn đó!", kiss: "Một nụ hôn nồng cháy vừa được gửi tới!", hug: "Người ấy muốn được ôm bạn ngay lúc này...", sorry: "Người ấy đang hối lỗi kìa, đừng giận nhé!", heart: "Thình thịch! Trái tim người ấy đang đập vì bạn!" };
                 
-                document.getElementById('nudge-emoji').innerText = emojiMap[signal.type] || "❤️";
-                document.getElementById('nudge-message').innerText = msgMap[signal.type] || "Có một tín hiệu yêu thương mới!";
+                const title = "HeartSync ❤️";
+                const body = msgMap[signal.type] || "Có một tín hiệu yêu thương mới!";
+                const emoji = emojiMap[signal.type] || "❤️";
+
+                document.getElementById('nudge-emoji').innerText = emoji;
+                document.getElementById('nudge-message').innerText = body;
                 
                 this.nudgeOverlay.classList.add('active');
                 if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
+                // Native System Notification
+                if (Notification.permission === "granted") {
+                    new Notification(title, {
+                        body: body,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/833/833472.png'
+                    });
+                }
+            }
+
+            requestNotificationPermission() {
+                if (!("Notification" in window)) {
+                    alert("Trình duyệt của bạn không hỗ trợ thông báo.");
+                    return;
+                }
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        this.showToast("Đã bật thông báo thành công! ✨");
+                        this.render();
+                    }
+                });
             }
 
             showToast(msg) {
@@ -1684,22 +1712,31 @@
                 for(let i = 0; i < firstDay; i++) daysHTML += '<div></div>';
                 
                 const periodBlocks = this.getPeriodBlocks();
-                let habitLength = parseInt(this.cycleData.length);
+                let habitLength = parseInt(this.cycleData.length) || 28;
                 if (periodBlocks.length >= 2) {
                     let totalGap = 0;
+                    let count = 0;
                     for (let i = 1; i < periodBlocks.length; i++) {
                         const d1 = new Date(periodBlocks[i-1][0]);
                         const d2 = new Date(periodBlocks[i][0]);
-                        totalGap += Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+                        const gap = Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+                        if (!isNaN(gap)) {
+                            totalGap += gap;
+                            count++;
+                        }
                     }
-                    habitLength = Math.round(totalGap / (periodBlocks.length - 1));
+                    if (count > 0) habitLength = Math.round(totalGap / count);
                 }
+
+                if (isNaN(habitLength) || habitLength <= 0) habitLength = 28;
 
                 let nextPeriodDate = null;
                 if (periodBlocks.length > 0) {
                     const latestStart = new Date(periodBlocks[periodBlocks.length - 1][0]);
-                    nextPeriodDate = new Date(latestStart);
-                    nextPeriodDate.setDate(latestStart.getDate() + habitLength);
+                    if (!isNaN(latestStart.getTime())) {
+                        nextPeriodDate = new Date(latestStart);
+                        nextPeriodDate.setDate(latestStart.getDate() + habitLength);
+                    }
                 }
 
                 // Current day in cycle for ring
@@ -1835,8 +1872,11 @@
             }
 
             getPeriodBlocks() {
-                if (this.cycleData.periodDays.length === 0) return [];
-                const sorted = [...this.cycleData.periodDays].sort((a,b) => new Date(a) - new Date(b));
+                if (!this.cycleData || !this.cycleData.periodDays || this.cycleData.periodDays.length === 0) return [];
+                const sorted = [...this.cycleData.periodDays]
+                    .filter(d => !isNaN(new Date(d).getTime()))
+                    .sort((a,b) => new Date(a) - new Date(b));
+                if (sorted.length === 0) return [];
                 const blocks = [];
                 let currentBlock = [sorted[0]];
 
@@ -1980,6 +2020,13 @@
                             <div style="font-size: 0.9rem; font-weight: 600; opacity: 0.9;">Nhấn vào trái tim để gửi tín hiệu yêu thương!</div>
                         </div>
 
+                        <div style="background: white; border-radius: 20px; padding: 20px; margin-bottom: 20px; text-align: center; border: 1px dashed var(--primary);">
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Để nhận thông báo khi không mở app:</p>
+                            <button class="btn" style="padding: 10px 20px; font-size: 0.9rem;" onclick="app.requestNotificationPermission()">
+                                ${Notification.permission === 'granted' ? '✅ Đã bật thông báo' : '🔔 Bật thông báo hệ thống'}
+                            </button>
+                        </div>
+
                         <div class="card">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                                 <h3 style="font-size: 1rem;">🚀 Gửi tín hiệu nhanh</h3>
@@ -2086,7 +2133,7 @@
             }
 
             importStatus() {
-                let code = document.getElementById('import-code').value.trim().toLowerCase();
+                let code = document.getElementById('import-code').value.replace(/\s+/g, '').toUpperCase();
                 if (!code) return;
                 
                 // Treat as Love Key connection

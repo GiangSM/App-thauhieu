@@ -165,7 +165,7 @@
 <body>
     <div class="container">
         <div class="logo">
-            <h1>❤️ HeartSync</h1>
+            <h1>❤️ HeartSync v1.2</h1>
             <p>Kết nối hai trái tim</p>
         </div>
         
@@ -289,7 +289,7 @@
 
         async function joinCouple() {
             const name = document.getElementById('join-name').value.trim();
-            const code = document.getElementById('join-code').value.trim().toLowerCase();
+            const code = document.getElementById('join-code').value.replace(/\s+/g, '').toUpperCase();
             
             if (!name || !code) {
                 showStatus('join-result', 'Vui lòng nhập đầy đủ thông tin!', 'error');
@@ -306,7 +306,7 @@
                     showStatus('join-result', `✅ Kết nối thành công!`, 'success');
                     setTimeout(() => openApp(), 1500);
                 } else {
-                    showStatus('join-result', 'Mã cặp đôi không tồn tại!', 'error');
+                    showStatus('join-result', `Mã cặp đôi [${code}] không tồn tại!`, 'error');
                 }
             } catch (e) {
                 showStatus('join-result', 'Lỗi kết nối Firebase!', 'error');
