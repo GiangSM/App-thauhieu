@@ -1230,7 +1230,7 @@
                 if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
                 // Native System Notification
-                if (Notification.permission === "granted") {
+                if (typeof Notification !== 'undefined' && Notification.permission === "granted") {
                     new Notification(title, {
                         body: body,
                         icon: 'https://cdn-icons-png.flaticon.com/512/833/833472.png'
@@ -1239,8 +1239,8 @@
             }
 
             requestNotificationPermission() {
-                if (!("Notification" in window)) {
-                    alert("Trình duyệt của bạn không hỗ trợ thông báo.");
+                if (typeof Notification === 'undefined') {
+                    alert("Trình duyệt này (có thể là trình duyệt trong Facebook/Messenger) không hỗ trợ thông báo hệ thống. Bạn nên mở bằng Safari hoặc Chrome nhé!");
                     return;
                 }
                 Notification.requestPermission().then(permission => {
@@ -1998,7 +1998,7 @@
             renderCouple() {
                 const today = new Date().toISOString().split('T')[0];
                 const myEntry = this.moodHistory.find(h => h.date === today);
-                const myMood = myEntry ? MOOD_DATA.find(m => m.id === myEntry.mood) : { icon: '❓', name: 'Chưa cập nhật' };
+                const myMood = (myEntry ? MOOD_DATA.find(m => m.id === myEntry.mood) : null) || { icon: '❓', name: 'Chưa cập nhật' };
                 const loverMoodData = MOOD_DATA.find(m => m.id === this.loverMood) || MOOD_DATA[0];
 
                 this.content.innerHTML = `
@@ -2023,7 +2023,7 @@
                         <div style="background: white; border-radius: 20px; padding: 20px; margin-bottom: 20px; text-align: center; border: 1px dashed var(--primary);">
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Để nhận thông báo khi không mở app:</p>
                             <button class="btn" style="padding: 10px 20px; font-size: 0.9rem;" onclick="app.requestNotificationPermission()">
-                                ${Notification.permission === 'granted' ? '✅ Đã bật thông báo' : '🔔 Bật thông báo hệ thống'}
+                                ${typeof Notification !== 'undefined' && Notification.permission === 'granted' ? '✅ Đã bật thông báo' : '🔔 Bật thông báo hệ thống'}
                             </button>
                         </div>
 
