@@ -1154,7 +1154,16 @@
                         if (!data) return;
 
                         if (data.vault) {
-                            this.vault = data.vault;
+                            this.vault = data.vault.map(item => {
+                                if (item.id === 'food') {
+                                    item.foods = item.foods || [];
+                                    item.drinks = item.drinks || [];
+                                }
+                                if (item.id === 'flowers') {
+                                    item.selection = item.selection || [];
+                                }
+                                return item;
+                            });
                             localStorage.setItem('heartsync_vault', JSON.stringify(this.vault));
                         } else {
                             this.pushToCloud('vault', this.vault);
@@ -1414,6 +1423,8 @@
             closeVaultDetail() { this.modal.classList.remove('active'); }
 
             renderFoodDetail(item) {
+                const foods = item.foods || [];
+                const drinks = item.drinks || [];
                 this.modalContent.innerHTML = `
                     <div class="form-group">
                         <label>Phần 1: Món ăn Việt Nam & Quốc tế</label>
@@ -1421,14 +1432,14 @@
                             <input type="text" placeholder="Gõ để tìm món..." oninput="app.searchData(this, 'food')" autocomplete="off">
                             <div class="search-results" id="food-results"></div>
                         </div>
-                        <div class="tag-container" id="food-tags">${item.foods.map((f, i) => `<span class="tag">${f} <span class="remove" onclick="app.removeItem('food', ${i})">×</span></span>`).join('')}</div>
+                        <div class="tag-container" id="food-tags">${foods.map((f, i) => `<span class="tag">${f} <span class="remove" onclick="app.removeItem('food', ${i})">×</span></span>`).join('')}</div>
                     </div>
                     <div class="form-group" style="margin-top: 30px;">
                         <label>Phần 2: Chọn Đồ uống theo thương hiệu</label>
                         <div class="item-grid">
                             ${BRAND_DATA.map(b => `<div class="grid-btn" onclick="app.openBrandMenu('${b.id}')"><div style="font-size:1.1rem; font-weight:900; color: ${b.color}">${b.abbr}</div><span>${b.name}</span></div>`).join('')}
                         </div>
-                        <div class="tag-container" id="drink-tags">${item.drinks.map((d, i) => `<span class="tag">${d} <span class="remove" onclick="app.removeItem('drink', ${i})">×</span></span>`).join('')}</div>
+                        <div class="tag-container" id="drink-tags">${drinks.map((d, i) => `<span class="tag">${d} <span class="remove" onclick="app.removeItem('drink', ${i})">×</span></span>`).join('')}</div>
                     </div>
                 `;
             }
@@ -1712,13 +1723,29 @@
 
             saveVaultDetail() {
                 const item = this.vault.find(i => i.id === this.activeDetailId);
-                if (this.activeDetailId === 'food') item.value = `${item.foods.length} món, ${item.drinks.length} uống`;
-                else if (this.activeDetailId === 'flowers') item.value = item.selection.join(', ');
-                else if (this.activeDetailId === 'size') item.value = `${item.height}cm, ${item.weight}kg`;
-                else if (this.activeDetailId === 'hates') { item.notes = document.getElementById('hates-input').value; item.value = item.notes.substring(0, 15) + "..."; }
+                if (!item) return;
+
+                if (this.activeDetailId === 'food') {
+                    const foodCount = (item.foods || []).length;
+                    const drinkCount = (item.drinks || []).length;
+                    item.value = `${foodCount} món, ${drinkCount} uống`;
+                }
+                else if (this.activeDetailId === 'flowers') {
+                    item.value = (item.selection || []).join(', ');
+                }
+                else if (this.activeDetailId === 'size') {
+                    item.value = `${item.height || 0}cm, ${item.weight || 0}kg`;
+                }
+                else if (this.activeDetailId === 'hates') {
+                    const notes = document.getElementById('hates-input')?.value || "";
+                    item.notes = notes;
+                    item.value = notes.length > 15 ? notes.substring(0, 15) + "..." : notes;
+                }
+                
                 localStorage.setItem('heartsync_vault', JSON.stringify(this.vault));
                 this.pushToCloud('vault', this.vault);
-                this.closeVaultDetail(); this.render();
+                this.closeVaultDetail(); 
+                this.render();
             }
 
             renderCycle() {
