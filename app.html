@@ -1131,16 +1131,19 @@
                         if (this.currentTab === 'couple') this.render();
                     });
 
-                    // Listen for signals (nudges) specifically
-                    this.signalRef = this.db.ref(`couples/${this.loveKey}/signal`);
-                    this.signalRef.on('value', (snapshot) => {
+                    // Listen for signals (nudges) specifically - using Queue for reliability
+                    this.signalsRef = this.db.ref(`couples/${this.loveKey}/signals`);
+                    // Initial load - ignore old signals
+                    let isInitialLoad = true;
+                    this.signalsRef.limitToLast(1).once('value', () => { isInitialLoad = false; });
+
+                    this.signalsRef.limitToLast(5).on('child_added', (snapshot) => {
+                        if (isInitialLoad) return;
                         const data = snapshot.val();
                         if (!data) return;
-                        if (data.time > this.lastSignalTime) {
-                            if (data.from !== this.getDeviceId()) {
-                                this.receiveNudge(data);
-                            }
-                            this.lastSignalTime = data.time;
+                        
+                        if (data.from !== this.getDeviceId()) {
+                            this.receiveNudge(data);
                         }
                     });
 
@@ -1153,21 +1156,32 @@
                         if (data.vault) {
                             this.vault = data.vault;
                             localStorage.setItem('heartsync_vault', JSON.stringify(this.vault));
+                        } else {
+                            this.pushToCloud('vault', this.vault);
                         }
+
                         if (data.challenges) {
                             this.loveChallenges = data.challenges;
                             localStorage.setItem('heartsync_love_challenges', JSON.stringify(this.loveChallenges));
+                        } else {
+                            this.pushToCloud('challenges', this.loveChallenges);
                         }
+
                         if (data.cycle) {
                             this.cycleData = {
                                 length: data.cycle.length || 28,
                                 periodDays: data.cycle.periodDays || []
                             };
                             localStorage.setItem('heartsync_cycle_data', JSON.stringify(this.cycleData));
+                        } else {
+                            this.pushToCloud('cycle', this.cycleData);
                         }
+
                         if (data.anniversary) {
                             this.anniversaryDate = data.anniversary;
                             localStorage.setItem('heartsync_anniversary', this.anniversaryDate);
+                        } else {
+                            this.pushToCloud('anniversary', this.anniversaryDate);
                         }
                         
                         // Sync Lover Mood
@@ -1264,7 +1278,11 @@
             pushToCloud(path, data) {
                 // Sync via Firebase
                 if (this.isCloudEnabled && this.db) {
-                    this.db.ref(`couples/${this.loveKey}/${path}`).set(data);
+                    if (path === 'signals') {
+                        this.db.ref(`couples/${this.loveKey}/signals`).push(data);
+                    } else {
+                        this.db.ref(`couples/${this.loveKey}/${path}`).set(data);
+                    }
                 }
                 
                 // Sync via Socket.io
@@ -1921,6 +1939,20 @@
             renderCalendar() {
                 const start = new Date(this.anniversaryDate);
                 const today = new Date();
+                
+                // Fallback for invalid date
+                if (isNaN(start.getTime())) {
+                    this.content.innerHTML = `<div class="card" style="text-align: center; padding: 40px;">
+                        <h2 style="color: var(--primary);">Ngày kỷ niệm không hợp lệ</h2>
+                        <p>Vui lòng chọn lại ngày bắt đầu yêu bên dưới.</p>
+                        <div class="form-group" style="margin-top: 20px;">
+                            <input type="date" id="anniversary-input" value="2023-10-20">
+                            <button onclick="app.saveAnniversary()" class="btn" style="margin-top: 10px;">Lưu lại</button>
+                        </div>
+                    </div>`;
+                    return;
+                }
+
                 const diffTime = Math.abs(today - start);
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -2101,8 +2133,8 @@
                 const names = { miss: "Nhớ em/anh quá à! 🥺❤️", kiss: "Gửi em/anh một nụ hôn nồng cháy! 💋✨", hug: "Muốn được ôm em/anh ngay lúc này... 🫂💕", sorry: "Anh/Em biết lỗi rồi, đừng giận nữa nha 🙏❤️", heart: "Thình thịch! Tim anh/em đang đập vì nhớ em/anh nè! ❤️💓" };
                 const msg = names[type] || "Đang nghĩ về em/anh!";
                 
-                // Push to Cloud Signal
-                this.pushToCloud('signal', {
+                // Push to Cloud Signal Queue
+                this.pushToCloud('signals', {
                     type: type,
                     from: this.getDeviceId(),
                     time: firebase.database.ServerValue.TIMESTAMP
